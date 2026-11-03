@@ -197,12 +197,25 @@ class SoundEngine {
     }
     this.init();
     this.isMuted = false;
-    this.songAudio.play().then(() => {
-      this.isPlaying = true;
-      updateSoundUI();
-    }).catch(err => {
-      console.warn("Autoplay needs user interaction first", err);
-    });
+
+    if (!this.songAudio) return;
+
+    // Reset playback position to 0:00 before every new playback
+    try {
+      this.songAudio.currentTime = 0;
+    } catch (err) {
+      console.warn("Could not reset audio currentTime:", err);
+    }
+
+    const playPromise = this.songAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        this.isPlaying = true;
+        updateSoundUI();
+      }).catch(err => {
+        console.warn("Autoplay needs user interaction first or was interrupted:", err);
+      });
+    }
   }
 
   pauseMusic() {
@@ -210,6 +223,20 @@ class SoundEngine {
       this.songAudio.pause();
     }
     this.isPlaying = false;
+    updateSoundUI();
+  }
+
+  stopMusic() {
+    if (this.songAudio) {
+      this.songAudio.pause();
+      try {
+        this.songAudio.currentTime = 0;
+      } catch (err) {
+        console.warn("Could not reset audio currentTime:", err);
+      }
+    }
+    this.isPlaying = false;
+    this.wasPlayingBeforeVideo = false;
     updateSoundUI();
   }
 
@@ -772,7 +799,7 @@ function navigateTo(targetIndex) {
   // Background music is strictly reserved for the final cake surprise.
   // Keep music completely OFF during intermediate screens (0, 1, 2) or before candle blowout.
   if (currentScreenIndex !== 3 || !birthdaySongUnlocked) {
-    soundEngine.pauseMusic();
+    soundEngine.stopMusic();
   } else if (birthdaySongUnlocked && !soundEngine.isMuted && !soundEngine.isPlaying) {
     soundEngine.startMusic();
   }
@@ -1255,24 +1282,165 @@ function initVideoSlots() {
   videoCards.forEach((card, index) => {
     const fileInput = card.querySelector(".video-file-input");
     const video = card.querySelector(".video-element");
-    const placeholder = card.querySelector(".video-placeholder-box");
-    const playOverlay = card.querySelector(".video-play-overlay");
+    const container = card.querySelector(".video-player-container");
+    const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
+    const thumbnailClipName = card.querySelector(".thumbnail-clip-name");
     const replaceBtn = card.querySelector(".video-replace-btn");
-    const uploadTrigger = card.querySelector(".trigger-video-upload");
     const titleEl = card.querySelector(".video-title-editable");
     const noteEl = card.querySelector(".video-caption-label");
 
-    // Load saved captions
+    // Load saved captions from appConfig
     if (appConfig.videoCaptions && appConfig.videoCaptions[index]) {
-      if (titleEl) titleEl.textContent = appConfig.videoCaptions[index].title;
-      if (noteEl) noteEl.textContent = appConfig.videoCaptions[index].note;
+      const savedTitle = appConfig.videoCaptions[index].title;
+      const savedNote = appConfig.videoCaptions[index].note;
+      if (titleEl && savedTitle) titleEl.textContent = savedTitle;
+      if (thumbnailClipName && savedTitle) thumbnailClipName.textContent = savedTitle;
+      if (noteEl && savedNote) noteEl.textContent = savedNote;
     }
 
-    uploadTrigger?.addEventListener("click", () => fileInput?.click());
-    replaceBtn?.addEventListener("click", () => fileInput?.click());
+    // Determine if video currently has a playable source
+    function hasVideoSource() {
+      if (!video) return false;
+      const src = video.currentSrc || video.src;
+      if (src && src.trim() !== "" && src !== window.location.href) {
+        return true;
+      }
+      const sourceEl = video.querySelector("source");
+      return Boolean(sourceEl && sourceEl.src && sourceEl.src.trim() !== "");
+    }
 
+    // 1. Initial State (Before Clicking Play):
+    // - Hide actual video element & video frames
+    // - Hide all native controls (timeline, volume, duration, fullscreen)
+    // - Show the premium thumbnail placeholder with circular Play button
+    if (video) {
+      video.controls = false;
+      video.style.display = "none";
+      try {
+        video.currentTime = 0;
+      } catch (e) {}
+    }
+
+    if (container) {
+      container.classList.remove("is-playing");
+    }
+
+    if (thumbnailOverlay) {
+      thumbnailOverlay.style.display = "flex";
+    }
+
+    if (replaceBtn) {
+      replaceBtn.style.display = "inline-flex";
+    }
+
+    // 2. Start Video Playback (After Clicking Play):
+    // - Replaces thumbnail placeholder with the actual video
+    // - Starts playing from 0:00
+    // - Shows native video controls only after playback starts
+    function startPlayback() {
+      if (!video) return;
+
+      if (!hasVideoSource()) {
+        fileInput?.click();
+        return;
+      }
+
+      // Pause any other video card currently playing
+      pauseOtherVideos(video);
+
+      // Duck background music
+      soundEngine.pauseForVideo();
+
+      // Reset playback position to 0:00
+      try {
+        video.currentTime = 0;
+      } catch (e) {}
+
+      // Reveal actual video element and hide thumbnail placeholder
+      if (container) {
+        container.classList.add("is-playing");
+      }
+      video.style.display = "block";
+      if (thumbnailOverlay) {
+        thumbnailOverlay.style.display = "none";
+      }
+
+      // Enable native controls only after playback starts
+      video.controls = true;
+
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn("Video play interrupted or requires user interaction:", err);
+        });
+      }
+    }
+
+    // 3. Stop Playback & Return to Thumbnail (After Video Ends / Reset):
+    // - Shows video thumbnail/placeholder again
+    // - Hides native controls
+    // - Resets video playback position to 0:00
+    function stopPlaybackAndShowThumbnail() {
+      if (!video) return;
+
+      video.pause();
+      try {
+        video.currentTime = 0;
+      } catch (e) {}
+
+      // Hide native controls
+      video.controls = false;
+
+      // Hide video element and show thumbnail placeholder
+      video.style.display = "none";
+      if (container) {
+        container.classList.remove("is-playing");
+      }
+      if (thumbnailOverlay) {
+        thumbnailOverlay.style.display = "flex";
+      }
+
+      // Resume background music if applicable
+      soundEngine.resumeAfterVideo();
+    }
+
+    // Play button & thumbnail click interaction
+    thumbnailOverlay?.addEventListener("click", () => {
+      startPlayback();
+    });
+
+    thumbnailOverlay?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        startPlayback();
+      }
+    });
+
+    // When video ends naturally:
+    // - Show the video thumbnail/placeholder again
+    // - Hide the native controls
+    // - Clicking Play again restarts the video from 0:00
+    video?.addEventListener("ended", () => {
+      stopPlaybackAndShowThumbnail();
+    });
+
+    // Synchronize play & pause events
+    video?.addEventListener("play", () => {
+      pauseOtherVideos(video);
+      soundEngine.pauseForVideo();
+      if (container) container.classList.add("is-playing");
+      video.style.display = "block";
+      if (thumbnailOverlay) thumbnailOverlay.style.display = "none";
+      video.controls = true;
+    });
+
+    video?.addEventListener("pause", () => {
+      soundEngine.resumeAfterVideo();
+    });
+
+    // File Input change handler (Upload / Replace)
     fileInput?.addEventListener("change", (e) => {
-      const file = e.target.files[0];
+      const file = e.target.files && e.target.files[0];
       if (!file) return;
 
       if (!file.type.startsWith("video/")) {
@@ -1280,53 +1448,25 @@ function initVideoSlots() {
         return;
       }
 
+      // Stop any current playback on this card
+      stopPlaybackAndShowThumbnail();
+
       const videoUrl = registerObjectUrl(URL.createObjectURL(file));
       video.src = videoUrl;
-      video.classList.add("loaded");
-      if (placeholder) placeholder.style.display = "none";
-      if (playOverlay) {
-        playOverlay.style.display = "flex";
-        playOverlay.classList.add("paused");
-      }
+      video.preload = "none";
+      video.controls = false;
+      video.style.display = "none";
+
+      if (container) container.classList.remove("is-playing");
+      if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
       if (replaceBtn) replaceBtn.style.display = "inline-flex";
 
-      // Native controls enabled on video once loaded
-      video.controls = true;
-
       soundEngine.playClick();
-      showToast(`Video #${index + 1} loaded! Click to play. 🎞️`, "🎬");
+      showToast(`Clip #${index + 1} ready! Click Play to watch. 🎞️`, "🎬");
     });
 
-    // Custom play overlay toggle
-    playOverlay?.addEventListener("click", () => {
-      if (!video.src) return;
-
-      if (video.paused) {
-        // Pause all other videos first!
-        pauseAllVideos();
-        video.play();
-        playOverlay.classList.remove("paused");
-      } else {
-        video.pause();
-        playOverlay.classList.add("paused");
-      }
-    });
-
-    // Sync play overlay state with native video playback
-    video?.addEventListener("play", () => {
-      pauseOtherVideos(video);
-      soundEngine.pauseForVideo();
-      playOverlay?.classList.remove("paused");
-    });
-
-    video?.addEventListener("pause", () => {
-      playOverlay?.classList.add("paused");
-      soundEngine.resumeAfterVideo();
-    });
-
-    video?.addEventListener("ended", () => {
-      playOverlay?.classList.add("paused");
-      soundEngine.resumeAfterVideo();
+    replaceBtn?.addEventListener("click", () => {
+      fileInput?.click();
     });
 
     // Editable video title and note
@@ -1334,10 +1474,12 @@ function initVideoSlots() {
       const current = titleEl.textContent;
       const updated = prompt("Edit video title:", current);
       if (updated !== null && updated.trim() !== "") {
-        titleEl.textContent = updated.trim();
+        const val = updated.trim();
+        titleEl.textContent = val;
+        if (thumbnailClipName) thumbnailClipName.textContent = val;
         if (!appConfig.videoCaptions) appConfig.videoCaptions = [];
         if (!appConfig.videoCaptions[index]) appConfig.videoCaptions[index] = {};
-        appConfig.videoCaptions[index].title = updated.trim();
+        appConfig.videoCaptions[index].title = val;
         saveConfig();
       }
     });
@@ -1346,10 +1488,11 @@ function initVideoSlots() {
       const current = noteEl.textContent;
       const updated = prompt("Edit video note / caption:", current);
       if (updated !== null && updated.trim() !== "") {
-        noteEl.textContent = updated.trim();
+        const val = updated.trim();
+        noteEl.textContent = val;
         if (!appConfig.videoCaptions) appConfig.videoCaptions = [];
         if (!appConfig.videoCaptions[index]) appConfig.videoCaptions[index] = {};
-        appConfig.videoCaptions[index].note = updated.trim();
+        appConfig.videoCaptions[index].note = val;
         saveConfig();
       }
     });
@@ -1521,7 +1664,7 @@ replayCelebrationBtn?.addEventListener("click", () => {
 
   // Song locks again until the cake surprise is revealed once more
   birthdaySongUnlocked = false;
-  soundEngine.pauseMusic();
+  soundEngine.stopMusic();
 
   // Relight 3D candles & reignite flames
   if (window.Cake3D) {

@@ -596,31 +596,31 @@
             </div>
 
             <div class="video-player-container">
-              <video class="video-element" playsinline preload="metadata"></video>
-              
-              <div class="video-placeholder-box">
-                <svg class="video-reel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <rect x="2" y="2" width="20" height="20" rx="4" />
-                  <path d="M7 2v20" />
-                  <path d="M17 2v20" />
-                  <path d="M2 12h20" />
-                  <path d="M2 7h5" /><path d="M2 17h5" />
-                  <path d="M17 7h5" /><path d="M17 17h5" />
-                </svg>
-                <div class="video-upload-prompt">Upload a sweet memory clip</div>
-                <button class="video-upload-btn trigger-video-upload">Choose Video</button>
-              </div>
+              <video class="video-element" playsinline preload="none"></video>
 
-              <!-- Custom Play Overlay -->
-              <div class="video-play-overlay" style="display: none;">
-                <div class="play-pause-circle">▶</div>
+              <!-- Premium Video Thumbnail / Placeholder Overlay (Before Play & After Video Ends) -->
+              <div class="video-thumbnail-placeholder" role="button" tabindex="0" aria-label="Play Geetha video clip">
+                <div class="thumbnail-ambient-glow"></div>
+                <div class="thumbnail-header-badge">
+                  <span class="thumbnail-badge-dot"></span>
+                  <span class="thumbnail-badge-text">Memory Reel</span>
+                </div>
+                <div class="thumbnail-play-circle" aria-hidden="true">
+                  <svg class="play-icon-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                  </svg>
+                </div>
+                <div class="thumbnail-footer-info">
+                  <div class="thumbnail-clip-name">Geetha</div>
+                  <span class="thumbnail-play-hint">Tap to Play 🎬</span>
+                </div>
               </div>
             </div>
 
             <input type="file" class="video-file-input" accept="video/mp4,video/webm,video/ogg,video/quicktime" style="display: none;">
 
             <div class="video-card-footer">
-              <button class="video-replace-btn" style="display: none;">🔄 Replace</button>
+              <button class="video-replace-btn" type="button">🔄 Replace Clip</button>
               <span class="video-caption-label" title="Click to edit caption">"A moment I can replay a thousand times."</span>
             </div>
           </div>
@@ -635,26 +635,31 @@
             </div>
 
             <div class="video-player-container">
-              <video class="video-element" playsinline preload="metadata"></video>
-              
-              <div class="video-placeholder-box">
-                <svg class="video-reel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <polygon points="23 7 16 12 23 17 23 7" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-                <div class="video-upload-prompt">Upload a funny or goofy moment</div>
-                <button class="video-upload-btn trigger-video-upload">Choose Video</button>
-              </div>
+              <video class="video-element" playsinline preload="none"></video>
 
-              <div class="video-play-overlay" style="display: none;">
-                <div class="play-pause-circle">▶</div>
+              <!-- Premium Video Thumbnail / Placeholder Overlay (Before Play & After Video Ends) -->
+              <div class="video-thumbnail-placeholder" role="button" tabindex="0" aria-label="Play Likki video clip">
+                <div class="thumbnail-ambient-glow"></div>
+                <div class="thumbnail-header-badge">
+                  <span class="thumbnail-badge-dot"></span>
+                  <span class="thumbnail-badge-text">Memory Reel</span>
+                </div>
+                <div class="thumbnail-play-circle" aria-hidden="true">
+                  <svg class="play-icon-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                  </svg>
+                </div>
+                <div class="thumbnail-footer-info">
+                  <div class="thumbnail-clip-name">Likki</div>
+                  <span class="thumbnail-play-hint">Tap to Play 🎬</span>
+                </div>
               </div>
             </div>
 
             <input type="file" class="video-file-input" accept="video/mp4,video/webm,video/ogg,video/quicktime" style="display: none;">
 
             <div class="video-card-footer">
-              <button class="video-replace-btn" style="display: none;">🔄 Replace</button>
+              <button class="video-replace-btn" type="button">🔄 Replace Clip</button>
               <span class="video-caption-label" title="Click to edit caption">"The funniest, most unscripted smile."</span>
             </div>
           </div>
@@ -669,26 +674,31 @@
             </div>
 
             <div class="video-player-container">
-              <video class="video-element" playsinline preload="metadata"></video>
-              
-              <div class="video-placeholder-box">
-                <svg class="video-reel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <circle cx="12" cy="12" r="10" />
-                  <polygon points="10 8 16 12 10 16 10 8" />
-                </svg>
-                <div class="video-upload-prompt">Upload a warm keepsake clip</div>
-                <button class="video-upload-btn trigger-video-upload">Choose Video</button>
-              </div>
+              <video class="video-element" playsinline preload="none"></video>
 
-              <div class="video-play-overlay" style="display: none;">
-                <div class="play-pause-circle">▶</div>
+              <!-- Premium Video Thumbnail / Placeholder Overlay (Before Play & After Video Ends) -->
+              <div class="video-thumbnail-placeholder" role="button" tabindex="0" aria-label="Play Koushik video clip">
+                <div class="thumbnail-ambient-glow"></div>
+                <div class="thumbnail-header-badge">
+                  <span class="thumbnail-badge-dot"></span>
+                  <span class="thumbnail-badge-text">Memory Reel</span>
+                </div>
+                <div class="thumbnail-play-circle" aria-hidden="true">
+                  <svg class="play-icon-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                  </svg>
+                </div>
+                <div class="thumbnail-footer-info">
+                  <div class="thumbnail-clip-name">Koushik</div>
+                  <span class="thumbnail-play-hint">Tap to Play 🎬</span>
+                </div>
               </div>
             </div>
 
             <input type="file" class="video-file-input" accept="video/mp4,video/webm,video/ogg,video/quicktime" style="display: none;">
 
             <div class="video-card-footer">
-              <button class="video-replace-btn" style="display: none;">🔄 Replace</button>
+              <button class="video-replace-btn" type="button">🔄 Replace Clip</button>
               <span class="video-caption-label" title="Click to edit caption">"Pure warmth and nostalgia."</span>
             </div>
           </div>
