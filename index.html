@@ -59,8 +59,12 @@
       </button>
     </nav>
 
-    <!-- Header Actions (Music) -->
+    <!-- Header Actions (Music & Cloud Sync) -->
     <div class="header-actions">
+      <button id="admin-cloud-btn" class="icon-btn admin-cloud-btn" title="Cloud Sync & Media Storage" aria-label="Cloud Sync & Media Storage">
+        <span id="admin-cloud-icon">☁️</span>
+        <span id="admin-cloud-label">Cloud</span>
+      </button>
       <button id="toggle-sound-btn" class="icon-btn" title="Toggle Music (Play / Pause)">
         <div class="sound-wave muted" id="sound-wave-indicator">
           <span></span><span></span><span></span>
@@ -795,6 +799,96 @@
 
   </main>
 
+  <!-- ==========================================
+       SUPABASE CLOUD MEDIA SYNC MODAL
+       ========================================== -->
+  <div id="cloud-admin-modal" class="cloud-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-modal-title" style="display: none;">
+    <div class="cloud-modal-backdrop" id="cloud-modal-backdrop"></div>
+    <div class="cloud-modal-card">
+      <div class="cloud-modal-header">
+        <div class="cloud-modal-title-group">
+          <span class="cloud-modal-icon">☁️</span>
+          <div>
+            <h2 id="cloud-modal-title">Cloud Media Storage</h2>
+            <p class="cloud-modal-sub">Supabase Permanent Storage for Shared Birthday Memories</p>
+          </div>
+        </div>
+        <button id="close-cloud-modal-btn" class="modal-close-btn" aria-label="Close modal">✕</button>
+      </div>
+
+      <div class="cloud-modal-body">
+        <!-- Status Banner -->
+        <div id="cloud-status-banner" class="cloud-status-banner status-checking">
+          <div class="status-indicator-dot"></div>
+          <span id="cloud-status-text">Checking Supabase connection...</span>
+        </div>
+
+        <!-- Connection Settings Accordion/Form -->
+        <div class="cloud-config-section">
+          <h3 class="cloud-section-heading">⚙️ Supabase Credentials</h3>
+          <p class="cloud-section-desc">Connect your Supabase project so uploaded photos & videos are saved permanently in the cloud for all visitors.</p>
+
+          <label class="cloud-input-label" for="sb-project-url">
+            <span>Project URL</span>
+            <small>Found in Supabase Dashboard → Settings → API</small>
+          </label>
+          <input type="url" id="sb-project-url" class="cloud-text-input" placeholder="https://xyzabcdefg.supabase.co" autocomplete="off">
+
+          <label class="cloud-input-label" for="sb-anon-key">
+            <span>Anon / Public Key</span>
+            <small>Safe for browser use — secured by Row Level Security</small>
+          </label>
+          <input type="password" id="sb-anon-key" class="cloud-text-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off">
+
+          <div class="cloud-actions-row">
+            <button id="save-sb-config-btn" class="action-btn small-btn" type="button">Save & Connect</button>
+            <button id="test-sb-connection-btn" class="action-btn secondary-btn small-btn" type="button">Test Connection</button>
+          </div>
+        </div>
+
+        <!-- Owner Auth Section (Sign In to enable upload/edit permissions) -->
+        <div class="cloud-auth-section" id="cloud-auth-section">
+          <h3 class="cloud-section-heading">👑 Owner Authentication</h3>
+          <p class="cloud-section-desc">Sign in with your Supabase account to unlock upload, replace, and delete permissions.</p>
+
+          <div id="cloud-auth-logged-out" class="cloud-auth-form">
+            <input type="email" id="sb-owner-email" class="cloud-text-input" placeholder="Owner Email" autocomplete="email">
+            <input type="password" id="sb-owner-password" class="cloud-text-input" placeholder="Owner Password" autocomplete="current-password">
+            <button id="sb-owner-login-btn" class="action-btn small-btn" type="button">Sign In as Owner</button>
+          </div>
+
+          <div id="cloud-auth-logged-in" class="cloud-auth-active" style="display: none;">
+            <div class="owner-badge">
+              <span>👑 Signed in as: <strong id="owner-email-display">admin@birthday.com</strong></span>
+            </div>
+            <button id="sb-owner-logout-btn" class="action-btn secondary-btn small-btn" type="button">Sign Out</button>
+          </div>
+        </div>
+
+        <!-- Migration Section (Push local IndexedDB files to cloud) -->
+        <div class="cloud-migration-section">
+          <h3 class="cloud-section-heading">🔄 Local-to-Cloud Migration</h3>
+          <p class="cloud-section-desc">Upload previously saved photos and videos from your browser to Supabase so everyone opening your link sees them.</p>
+
+          <div class="migration-stats">
+            <span id="migration-local-count">Checking browser media...</span>
+          </div>
+
+          <div id="migration-progress-box" class="migration-progress-box" style="display: none;">
+            <div class="migration-bar-bg">
+              <div id="migration-bar-fill" class="migration-bar-fill" style="width: 0%;"></div>
+            </div>
+            <span id="migration-progress-label">Syncing...</span>
+          </div>
+
+          <button id="start-migration-btn" class="action-btn small-btn" type="button">
+            <span>🚀 Sync All Local Media to Cloud</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification System -->
   <div id="toast-container" aria-live="assertive"></div>
 
@@ -803,6 +897,10 @@
     <source src="assets/song.aac" type="audio/aac">
     <source src="assets/song.mp3" type="audio/mpeg">
   </audio>
+
+  <!-- Supabase Client SDK (Cloud Permanent Media Storage) -->
+  <script src="assets/supabase.min.js"></script>
+  <script src="supabase-config.js"></script>
 
   <!-- 3D Graphics & Cake Engine -->
   <script src="assets/three.min.js"></script>
