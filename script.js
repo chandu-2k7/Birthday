@@ -113,6 +113,236 @@ window.addEventListener("beforeunload", () => {
 });
 
 // ==========================================
+// 1B. INDEXEDDB PERMANENT MEDIA STORAGE 🗄️
+// Stores uploaded photo & video Blobs permanently across browser sessions.
+// ==========================================
+
+class MediaStorage {
+  constructor() {
+    this.dbName = "MagicalBirthdayMediaDB";
+    this.dbVersion = 1;
+    this.storeName = "media_blobs";
+    this.db = null;
+    this.initPromise = null;
+  }
+
+  // Open / initialize IndexedDB
+  async init() {
+    if (this.db) return this.db;
+    if (this.initPromise) return this.initPromise;
+
+    if (typeof window === "undefined" || !("indexedDB" in window)) {
+      console.warn("IndexedDB is not supported in this browser environment.");
+      return null;
+    }
+
+    this.initPromise = new Promise((resolve) => {
+      try {
+        const request = window.indexedDB.open(this.dbName, this.dbVersion);
+
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            const store = db.createObjectStore(this.storeName, { keyPath: "id" });
+            store.createIndex("by_type", "mediaType", { unique: false });
+            store.createIndex("by_slot", "slotIndex", { unique: false });
+          }
+        };
+
+        request.onsuccess = (e) => {
+          this.db = e.target.result;
+          this.db.onversionchange = () => {
+            if (this.db) {
+              this.db.close();
+              this.db = null;
+            }
+          };
+          resolve(this.db);
+        };
+
+        request.onerror = (e) => {
+          console.error("IndexedDB open error:", e.target.error);
+          resolve(null);
+        };
+
+        request.onblocked = () => {
+          console.warn("IndexedDB open blocked by another open tab.");
+        };
+      } catch (err) {
+        console.error("Failed to initialize IndexedDB:", err);
+        resolve(null);
+      }
+    });
+
+    return this.initPromise;
+  }
+
+  // Save an uploaded media file (Blob) with full metadata
+  async saveMedia(mediaType, slotIndex, file) {
+    const db = await this.init();
+    if (!db || !file) return null;
+
+    const id = `${mediaType}_${slotIndex}`;
+    const record = {
+      id: id,
+      mediaType: mediaType, // "photo" or "video"
+      slotIndex: Number(slotIndex),
+      blob: file, // Store raw binary Blob directly (NO Base64 conversion!)
+      fileName: file.name || `${mediaType}_${slotIndex}`,
+      fileType: file.type || (mediaType === "photo" ? "image/jpeg" : "video/mp4"),
+      fileSize: file.size || 0,
+      timestamp: Date.now()
+    };
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([this.storeName], "readwrite");
+        const store = tx.objectStore(this.storeName);
+        const req = store.put(record);
+
+        req.onsuccess = () => {
+          resolve(record);
+        };
+
+        req.onerror = (e) => {
+          const err = e.target.error;
+          if (err && err.name === "QuotaExceededError") {
+            showToast("Storage quota exceeded! Please use smaller media files.", "⚠️");
+          } else {
+            console.error("Error saving media to IndexedDB:", err);
+          }
+          resolve(null);
+        };
+      } catch (err) {
+        console.error("Transaction error saving media to IndexedDB:", err);
+        resolve(null);
+      }
+    });
+  }
+
+  // Get a specific media item by type and slot
+  async getMedia(mediaType, slotIndex) {
+    const db = await this.init();
+    if (!db) return null;
+
+    const id = `${mediaType}_${slotIndex}`;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([this.storeName], "readonly");
+        const store = tx.objectStore(this.storeName);
+        const req = store.get(id);
+
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch (err) {
+        console.error("Transaction error getting media from IndexedDB:", err);
+        resolve(null);
+      }
+    });
+  }
+
+  // Retrieve all stored media items
+  async getAllMedia() {
+    const db = await this.init();
+    if (!db) return [];
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([this.storeName], "readonly");
+        const store = tx.objectStore(this.storeName);
+        const req = store.getAll();
+
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (err) {
+        console.error("Transaction error getting all media from IndexedDB:", err);
+        resolve([]);
+      }
+    });
+  }
+
+  // Delete a specific media item by type and slot (preserves all other items)
+  async deleteMedia(mediaType, slotIndex) {
+    const db = await this.init();
+    if (!db) return false;
+
+    const id = `${mediaType}_${slotIndex}`;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([this.storeName], "readwrite");
+        const store = tx.objectStore(this.storeName);
+        const req = store.delete(id);
+
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      } catch (err) {
+        console.error("Transaction error deleting media from IndexedDB:", err);
+        resolve(false);
+      }
+    });
+  }
+}
+
+const mediaStorage = new MediaStorage();
+
+// Retrieve all previously uploaded media from IndexedDB on page load & hydrate UI
+async function loadPersistedMedia() {
+  try {
+    const records = await mediaStorage.getAllMedia();
+    if (!records || records.length === 0) return;
+
+    const photoCards = document.querySelectorAll(".photo-card");
+    const videoCards = document.querySelectorAll(".video-card");
+
+    records.forEach(record => {
+      if (!record || !record.blob) return;
+
+      if (record.mediaType === "photo") {
+        const card = photoCards[record.slotIndex];
+        if (card) {
+          const img = card.querySelector(".photo-img");
+          const placeholder = card.querySelector(".photo-placeholder");
+          const removeBtn = card.querySelector(".remove-photo-btn");
+
+          // Always generate a fresh valid object URL from the stored Blob
+          const freshUrl = registerObjectUrl(URL.createObjectURL(record.blob));
+          if (img) {
+            img.src = freshUrl;
+            img.style.display = "block";
+          }
+          if (placeholder) placeholder.style.display = "none";
+          if (removeBtn) removeBtn.style.display = "inline-block";
+        }
+      } else if (record.mediaType === "video") {
+        const card = videoCards[record.slotIndex];
+        if (card) {
+          const video = card.querySelector(".video-element");
+          const container = card.querySelector(".video-player-container");
+          const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
+          const replaceBtn = card.querySelector(".video-replace-btn");
+
+          // Always generate a fresh valid object URL from the stored Blob
+          const freshUrl = registerObjectUrl(URL.createObjectURL(record.blob));
+          if (video) {
+            video.src = freshUrl;
+            video.preload = "none";
+            video.controls = false;
+            video.style.display = "none";
+          }
+          if (container) container.classList.remove("is-playing");
+          if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
+          if (replaceBtn) replaceBtn.style.display = "inline-flex";
+        }
+      }
+    });
+
+    console.log(`Retrieved & hydrated ${records.length} persistent media files from IndexedDB.`);
+  } catch (err) {
+    console.error("Error loading persisted media from IndexedDB:", err);
+  }
+}
+
+// ==========================================
 // 2. AUDIO & LOCKED BIRTHDAY SONG 🎵
 // The background song is permanently locked to the special birthday track
 // ==========================================
@@ -1177,14 +1407,17 @@ function initPhotoSlots() {
     });
 
     // File selected handler
-    fileInput?.addEventListener("change", (e) => {
-      const file = e.target.files[0];
+    fileInput?.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
       if (!file) return;
 
       if (!file.type.startsWith("image/")) {
         showToast("Please select a valid image file (PNG, JPG, WebP) 📸", "⚠️");
         return;
       }
+
+      // Save to IndexedDB permanently as raw Blob with metadata
+      await mediaStorage.saveMedia("photo", index, file);
 
       const imageUrl = registerObjectUrl(URL.createObjectURL(file));
       imgElement.src = imageUrl;
@@ -1197,8 +1430,12 @@ function initPhotoSlots() {
     });
 
     // Remove photo handler
-    removeBtn?.addEventListener("click", (e) => {
+    removeBtn?.addEventListener("click", async (e) => {
       e.stopPropagation();
+
+      // Delete from IndexedDB permanently (preserves all other photos and videos)
+      await mediaStorage.deleteMedia("photo", index);
+
       imgElement.src = "";
       imgElement.style.display = "none";
       if (placeholder) placeholder.style.display = "flex";
@@ -1242,8 +1479,8 @@ function initPhotoSlots() {
   });
 }
 
-// Batch upload button handler
-batchUploadInput?.addEventListener("change", (e) => {
+// Batch upload button handler (Add Photos)
+batchUploadInput?.addEventListener("change", async (e) => {
   const files = Array.from(e.target.files).filter(f => f.type.startsWith("image/"));
   if (files.length === 0) {
     showToast("No valid image files found.", "⚠️");
@@ -1253,11 +1490,15 @@ batchUploadInput?.addEventListener("change", (e) => {
   const cards = document.querySelectorAll(".photo-card");
   let loadedCount = 0;
 
-  files.slice(0, TOTAL_PHOTO_SLOTS).forEach((file, idx) => {
+  for (let idx = 0; idx < Math.min(files.length, TOTAL_PHOTO_SLOTS); idx++) {
+    const file = files[idx];
     if (cards[idx]) {
       const img = cards[idx].querySelector(".photo-img");
       const placeholder = cards[idx].querySelector(".photo-placeholder");
       const removeBtn = cards[idx].querySelector(".remove-photo-btn");
+
+      // Save to IndexedDB permanently as raw Blob with metadata
+      await mediaStorage.saveMedia("photo", idx, file);
 
       const imageUrl = registerObjectUrl(URL.createObjectURL(file));
       img.src = imageUrl;
@@ -1266,10 +1507,10 @@ batchUploadInput?.addEventListener("change", (e) => {
       if (removeBtn) removeBtn.style.display = "inline-block";
       loadedCount++;
     }
-  });
+  }
 
   soundEngine.playClick();
-  showToast(`Loaded ${loadedCount} photos into memories! ✨`, "📸");
+  showToast(`Saved & loaded ${loadedCount} photos into memories! ✨`, "📸");
 });
 
 // ==========================================
@@ -1439,7 +1680,7 @@ function initVideoSlots() {
     });
 
     // File Input change handler (Upload / Replace)
-    fileInput?.addEventListener("change", (e) => {
+    fileInput?.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
 
@@ -1450,6 +1691,9 @@ function initVideoSlots() {
 
       // Stop any current playback on this card
       stopPlaybackAndShowThumbnail();
+
+      // Save to IndexedDB permanently as raw Blob with metadata
+      await mediaStorage.saveMedia("video", index, file);
 
       const videoUrl = registerObjectUrl(URL.createObjectURL(file));
       video.src = videoUrl;
@@ -1512,6 +1756,53 @@ function pauseOtherVideos(currentVideo) {
     }
   });
 }
+
+// Batch video upload handler (Add Videos)
+const batchVideoInput = document.getElementById("batch-video-input");
+batchVideoInput?.addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files).filter(f => f.type.startsWith("video/"));
+  if (files.length === 0) {
+    showToast("No valid video files found (MP4, WebM, MOV) 🎬", "⚠️");
+    return;
+  }
+
+  const videoCards = document.querySelectorAll(".video-card");
+  let loadedCount = 0;
+
+  for (let idx = 0; idx < Math.min(files.length, videoCards.length); idx++) {
+    const file = files[idx];
+    const card = videoCards[idx];
+    if (card) {
+      const video = card.querySelector(".video-element");
+      const container = card.querySelector(".video-player-container");
+      const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
+      const replaceBtn = card.querySelector(".video-replace-btn");
+
+      if (video) {
+        video.pause();
+        try { video.currentTime = 0; } catch (err) {}
+      }
+
+      // Save to IndexedDB permanently as raw Blob with metadata
+      await mediaStorage.saveMedia("video", idx, file);
+
+      const videoUrl = registerObjectUrl(URL.createObjectURL(file));
+      if (video) {
+        video.src = videoUrl;
+        video.preload = "none";
+        video.controls = false;
+        video.style.display = "none";
+      }
+      if (container) container.classList.remove("is-playing");
+      if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
+      if (replaceBtn) replaceBtn.style.display = "inline-flex";
+      loadedCount++;
+    }
+  }
+
+  soundEngine.playClick();
+  showToast(`Saved & loaded ${loadedCount} video clips! 🎞️`, "🎬");
+});
 
 // ==========================================
 // 9. SCREEN 4: CHOCOLATE CAKE BIRTHDAY SURPRISE 🍫🎂
@@ -1713,11 +2004,15 @@ function showToast(message, icon = "✨") {
 // 12. INITIALIZATION ON DOM READY
 // ==========================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initStarfield();
   renderAtmosphericCanvas();
   initPhotoSlots();
   initVideoSlots();
+
+  // Retrieve & render all previously uploaded media from IndexedDB
+  await loadPersistedMedia();
+
   applyConfigToUI();
   updateProgressTracker();
   goToPhotoSlide(0);
