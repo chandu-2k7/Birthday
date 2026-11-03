@@ -19,7 +19,7 @@ const DEFAULT_CONFIG = {
   recipientName: "Buggaluuu",
   birthdayMessage: "Happy Birthday, 🌌 ✨ Like bioluminescent waves that turn the darkest oceans into a sea of stars, you have a beautiful way of making ordinary moments glow with magic. 🌊 🪼 May your life always shine with the kind of light that doesn't need the sun to be beautiful. 🌌 Adi anta ChatGPT gaadi sodhi ye, pichi dokku wastuu, chethaa, worstuuu, pandii! 😂 Inni tittulu birthday roju evaru ninnu titti undaru! 🤗 😋 😋 Ponile, anyways Happie 20th! ✌️ 🐱",
   photoCaptions: [
-    "Where the laughter never stopped ✨",
+    "Muheheheheheheheheeee",
     "Our favorite little adventure together 🌙",
     "Your warmest smile in the golden light 💛",
     "A quiet little moment together ☕",
@@ -286,357 +286,76 @@ class MediaStorage {
 const mediaStorage = new MediaStorage();
 
 // ==========================================
-// 1C. SUPABASE CLOUD MEDIA SERVICE ☁️
-// Permanent Cloud Storage & Metadata for Shared Website Visibility
+// 1C. STATIC MEDIA DEFINITIONS & PERSISTENCE 📸🎬
+// Bundled static photos & videos for permanent Vercel deployment
 // ==========================================
 
-class SupabaseMediaService {
-  constructor() {
-    this.client = null;
-    this.currentUser = null;
-    this.isInitialized = false;
-    this.hasActiveSession = false;
-  }
+const DEFAULT_PHOTOS = [
+  { slot: 0, url: "assets/photos/muhehehheheeh.jpeg", caption: "Muheheheheheheheheeee" },
+  { slot: 1, url: "assets/photos/jadal .jpeg", caption: "Our favorite little adventure together 🌙" },
+  { slot: 2, url: "assets/photos/pandi.jpeg", caption: "Your warmest smile in the golden light 💛" },
+  { slot: 3, url: "assets/photos/face.jpeg", caption: "A quiet little moment together ☕" },
+  { slot: 4, url: "assets/photos/3 monkies.jpeg", caption: "Dancing beneath the stars 🌙" },
+  { slot: 5, url: "assets/photos/ss.jpeg", caption: "Your happiness, captured in time 💫" }
+];
 
-  // Initialize the Supabase Client safely
-  init() {
-    if (this.client) return this.client;
-    if (typeof window === "undefined" || typeof window.supabase === "undefined") {
-      console.warn("Supabase JS SDK is not loaded.");
-      return null;
-    }
-    if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.isConfigured()) {
-      console.info("Supabase is not configured yet. Set credentials in Cloud Sync modal.");
-      return null;
-    }
+const DEFAULT_VIDEOS = [
+  { slot: 0, url: "assets/videos/g video.mp4", title: "Geetha", note: "A moment I can replay a thousand times." },
+  { slot: 1, url: "assets/videos/lk video.mp4", title: "Likki", note: "The funniest, most unscripted smile." },
+  { slot: 2, url: "assets/videos/kittu.mp4", title: "Koushik", note: "Pure warmth and nostalgia." }
+];
 
-    try {
-      const config = window.SUPABASE_CONFIG.get();
-      this.client = window.supabase.createClient(config.url, config.anonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false
-        }
-      });
-      this.isInitialized = true;
-      this.initAuthListener();
-      return this.client;
-    } catch (err) {
-      console.error("Error initializing Supabase client:", err);
-      return null;
-    }
-  }
-
-  // Listen to owner login/logout
-  async initAuthListener() {
-    if (!this.client) return;
-    try {
-      const { data } = await this.client.auth.getSession();
-      this.currentUser = (data && data.session) ? data.session.user : null;
-      this.hasActiveSession = Boolean(this.currentUser);
-      this.updateAdminUI();
-
-      this.client.auth.onAuthStateChange((_event, session) => {
-        this.currentUser = session ? session.user : null;
-        this.hasActiveSession = Boolean(this.currentUser);
-        this.updateAdminUI();
-      });
-    } catch (err) {
-      console.warn("Supabase auth session check:", err);
-    }
-  }
-
-  isAdmin() {
-    return Boolean(this.currentUser);
-  }
-
-  // Fetch all media items from Supabase 'media_items' table (Public SELECT)
-  async fetchAllMedia() {
-    const sb = this.init();
-    if (!sb) return [];
-
-    try {
-      const config = window.SUPABASE_CONFIG.get();
-      const { data, error } = await sb
-        .from(config.tableName)
-        .select("*")
-        .order("slot_index", { ascending: true });
-
-      if (error) {
-        console.warn("Supabase fetch error:", error.message);
-        return [];
-      }
-      return data || [];
-    } catch (err) {
-      console.error("Supabase fetch exception:", err);
-      return [];
-    }
-  }
-
-  // Upload an image or video file directly to Supabase Storage & upsert database row
-  async uploadMedia(mediaType, slotIndex, file, onProgress) {
-    const sb = this.init();
-    if (!sb) throw new Error("Supabase is not configured. Please connect your Supabase project in Cloud Sync.");
-
-    const config = window.SUPABASE_CONFIG.get();
-    const id = `${mediaType}_${slotIndex}`;
-    const ext = file.name ? file.name.split(".").pop().toLowerCase() : (mediaType === "photo" ? "jpg" : "mp4");
-    const safeExt = ext.replace(/[^a-z0-9]/gi, "") || (mediaType === "photo" ? "jpg" : "mp4");
-    const timestamp = Date.now();
-    const storagePath = `${mediaType}s/${id}_${timestamp}.${safeExt}`;
-
-    if (typeof onProgress === "function") onProgress(15, "Connecting to Cloud Storage...");
-
-    // 1. Upload file binary / Blob to 'birthday-media' bucket
-    const { data: uploadData, error: uploadError } = await sb.storage
-      .from(config.bucketName)
-      .upload(storagePath, file, {
-        cacheControl: "31536000", // 1 year cache for static photos/videos
-        upsert: true,
-        contentType: file.type || (mediaType === "photo" ? "image/jpeg" : "video/mp4")
-      });
-
-    if (uploadError) {
-      console.error("Supabase Storage upload error:", uploadError);
-      throw uploadError;
-    }
-
-    if (typeof onProgress === "function") onProgress(70, "Generating public media URL...");
-
-    // 2. Get permanent public URL
-    const { data: urlData } = sb.storage
-      .from(config.bucketName)
-      .getPublicUrl(storagePath);
-
-    const publicUrl = urlData.publicUrl;
-
-    if (typeof onProgress === "function") onProgress(85, "Saving metadata to database...");
-
-    // 3. Upsert row into media_items table
-    const itemRecord = {
-      id: id,
-      media_type: mediaType,
-      slot_index: Number(slotIndex),
-      file_name: file.name || `${mediaType}_${slotIndex}`,
-      file_type: file.type || (mediaType === "photo" ? "image/jpeg" : "video/mp4"),
-      file_size: file.size || 0,
-      public_url: publicUrl,
-      storage_path: storagePath,
-      updated_at: new Date().toISOString()
-    };
-
-    const { error: dbError } = await sb
-      .from(config.tableName)
-      .upsert(itemRecord, { onConflict: "id" });
-
-    if (dbError) {
-      console.warn("Database upsert warning (file was uploaded):", dbError.message);
-    }
-
-    if (typeof onProgress === "function") onProgress(100, "Done!");
-
-    return {
-      record: itemRecord,
-      publicUrl: publicUrl
-    };
-  }
-
-  // Delete media item from storage and database
-  async deleteMedia(mediaType, slotIndex) {
-    const sb = this.init();
-    if (!sb) return false;
-
-    const config = window.SUPABASE_CONFIG.get();
-    const id = `${mediaType}_${slotIndex}`;
-
-    try {
-      const { data } = await sb
-        .from(config.tableName)
-        .select("storage_path")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (data && data.storage_path) {
-        await sb.storage.from(config.bucketName).remove([data.storage_path]);
-      }
-
-      await sb.from(config.tableName).delete().eq("id", id);
-      return true;
-    } catch (err) {
-      console.error("Error deleting from Supabase:", err);
-      return false;
-    }
-  }
-
-  // Owner Login
-  async loginOwner(email, password) {
-    const sb = this.init();
-    if (!sb) throw new Error("Supabase is not configured yet.");
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    this.currentUser = data.user;
-    this.hasActiveSession = true;
-    this.updateAdminUI();
-    return data.user;
-  }
-
-  // Owner Logout
-  async logoutOwner() {
-    if (!this.client) return;
-    try {
-      await this.client.auth.signOut();
-    } catch (e) {}
-    this.currentUser = null;
-    this.hasActiveSession = false;
-    this.updateAdminUI();
-  }
-
-  // Update UI indicators for Admin
-  updateAdminUI() {
-    const cloudBtn = document.getElementById("admin-cloud-btn");
-    const banner = document.getElementById("cloud-status-banner");
-    const statusText = document.getElementById("cloud-status-text");
-    const loggedOutSection = document.getElementById("cloud-auth-logged-out");
-    const loggedInSection = document.getElementById("cloud-auth-logged-in");
-    const ownerEmailDisplay = document.getElementById("owner-email-display");
-
-    const isCfg = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-
-    if (cloudBtn) {
-      cloudBtn.classList.remove("connected", "is-admin");
-      if (this.currentUser) {
-        cloudBtn.classList.add("is-admin");
-        cloudBtn.title = `Supabase Connected (Owner: ${this.currentUser.email})`;
-      } else if (isCfg) {
-        cloudBtn.classList.add("connected");
-        cloudBtn.title = "Supabase Connected (Public View)";
-      } else {
-        cloudBtn.title = "Cloud Storage Not Configured (Click to setup)";
-      }
-    }
-
-    if (banner && statusText) {
-      banner.className = "cloud-status-banner";
-      if (!isCfg) {
-        banner.classList.add("status-error");
-        statusText.textContent = "Supabase not configured. Click Save & Connect below.";
-      } else if (this.currentUser) {
-        banner.classList.add("status-connected");
-        statusText.textContent = `Connected as Owner (${this.currentUser.email}) 👑`;
-      } else {
-        banner.classList.add("status-connected");
-        statusText.textContent = "Supabase Connected (Public Read Active) ☁️";
-      }
-    }
-
-    if (loggedOutSection && loggedInSection) {
-      if (this.currentUser) {
-        loggedOutSection.style.display = "none";
-        loggedInSection.style.display = "flex";
-        if (ownerEmailDisplay) ownerEmailDisplay.textContent = this.currentUser.email;
-      } else {
-        loggedOutSection.style.display = "flex";
-        loggedInSection.style.display = "none";
-      }
-    }
-  }
-}
-
-const supabaseMediaService = new SupabaseMediaService();
-
-// Helper to show a loading overlay on a photo or video card during upload
-function showCardUploadOverlay(cardElement, message = "Uploading to Cloud...", percent = null) {
-  if (!cardElement) return;
-  let overlay = cardElement.querySelector(".media-upload-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.className = "media-upload-overlay";
-    overlay.innerHTML = `
-      <div class="media-upload-spinner"></div>
-      <span class="upload-overlay-text">${message}</span>
-      <span class="upload-progress-percent">${percent !== null ? percent + "%" : ""}</span>
-    `;
-    cardElement.style.position = "relative";
-    cardElement.appendChild(overlay);
-  } else {
-    overlay.style.display = "flex";
-    const txt = overlay.querySelector(".upload-overlay-text");
-    const pct = overlay.querySelector(".upload-progress-percent");
-    if (txt) txt.textContent = message;
-    if (pct) pct.textContent = percent !== null ? percent + "%" : "";
-  }
-}
-
-function hideCardUploadOverlay(cardElement) {
-  if (!cardElement) return;
-  const overlay = cardElement.querySelector(".media-upload-overlay");
-  if (overlay) overlay.style.display = "none";
-}
-
-// Retrieve all media items: First from Supabase Cloud (for shared visitors),
-// with graceful fallback to IndexedDB (for local resilience)
+// Retrieve and render all media items across all devices on Vercel deployment
 async function loadPersistedMedia() {
   const photoCards = document.querySelectorAll(".photo-card");
   const videoCards = document.querySelectorAll(".video-card");
-  let hydratedFromCloudCount = 0;
-  let hydratedFromLocalCount = 0;
 
-  // 1. Try loading from Supabase Cloud (Single Source of Truth for shared visitors)
-  try {
-    if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured()) {
-      const cloudItems = await supabaseMediaService.fetchAllMedia();
-      if (cloudItems && cloudItems.length > 0) {
-        cloudItems.forEach(item => {
-          if (!item || !item.public_url) return;
+  // 1. Ensure static default photos are loaded into all slots
+  DEFAULT_PHOTOS.forEach(p => {
+    const card = photoCards[p.slot];
+    if (card) {
+      const img = card.querySelector(".photo-img");
+      const placeholder = card.querySelector(".photo-placeholder");
+      const removeBtn = card.querySelector(".remove-photo-btn");
+      const captionText = card.querySelector(".photo-caption-text");
 
-          if (item.media_type === "photo") {
-            const card = photoCards[item.slot_index];
-            if (card) {
-              const img = card.querySelector(".photo-img");
-              const placeholder = card.querySelector(".photo-placeholder");
-              const removeBtn = card.querySelector(".remove-photo-btn");
-
-              if (img) {
-                img.src = item.public_url;
-                img.style.display = "block";
-              }
-              if (placeholder) placeholder.style.display = "none";
-              if (removeBtn) removeBtn.style.display = "inline-block";
-              card.dataset.source = "cloud";
-              hydratedFromCloudCount++;
-            }
-          } else if (item.media_type === "video") {
-            const card = videoCards[item.slot_index];
-            if (card) {
-              const video = card.querySelector(".video-element");
-              const container = card.querySelector(".video-player-container");
-              const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
-              const replaceBtn = card.querySelector(".video-replace-btn");
-
-              if (video) {
-                video.src = item.public_url;
-                video.preload = "none";
-                video.controls = false;
-                video.style.display = "none";
-              }
-              if (container) container.classList.remove("is-playing");
-              if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
-              if (replaceBtn) replaceBtn.style.display = "inline-flex";
-              card.dataset.source = "cloud";
-              hydratedFromCloudCount++;
-            }
-          }
-        });
-
-        console.log(`☁️ Successfully hydrated ${hydratedFromCloudCount} media items from Supabase Cloud.`);
+      if (img && (!img.getAttribute("src") || img.getAttribute("src") === "")) {
+        img.src = p.url;
+      }
+      if (img) img.style.display = "block";
+      if (placeholder) placeholder.style.display = "none";
+      if (removeBtn) removeBtn.style.display = "inline-block";
+      if (captionText && (!appConfig.photoCaptions || !appConfig.photoCaptions[p.slot])) {
+        captionText.textContent = p.caption;
       }
     }
-  } catch (cloudErr) {
-    console.warn("Could not fetch media from Supabase Cloud, falling back to IndexedDB:", cloudErr);
-  }
+  });
 
-  // 2. Check local IndexedDB for any slots not yet populated by cloud
+  // 2. Ensure static default videos are loaded into all slots
+  DEFAULT_VIDEOS.forEach(v => {
+    const card = videoCards[v.slot];
+    if (card) {
+      const video = card.querySelector(".video-element");
+      const container = card.querySelector(".video-player-container");
+      const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
+      const replaceBtn = card.querySelector(".video-replace-btn");
+
+      if (video) {
+        const sourceEl = video.querySelector("source");
+        if (!sourceEl && (!video.src || video.src === window.location.href)) {
+          video.src = v.url;
+        }
+        video.preload = "none";
+        video.controls = false;
+        video.style.display = "none";
+      }
+      if (container) container.classList.remove("is-playing");
+      if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
+      if (replaceBtn) replaceBtn.style.display = "inline-flex";
+    }
+  });
+
+  // 3. Check local IndexedDB in case the owner made any custom replacements in browser
   try {
     const localRecords = await mediaStorage.getAllMedia();
     if (localRecords && localRecords.length > 0) {
@@ -645,7 +364,7 @@ async function loadPersistedMedia() {
 
         if (record.mediaType === "photo") {
           const card = photoCards[record.slotIndex];
-          if (card && card.dataset.source !== "cloud") {
+          if (card) {
             const img = card.querySelector(".photo-img");
             const placeholder = card.querySelector(".photo-placeholder");
             const removeBtn = card.querySelector(".remove-photo-btn");
@@ -657,11 +376,10 @@ async function loadPersistedMedia() {
             }
             if (placeholder) placeholder.style.display = "none";
             if (removeBtn) removeBtn.style.display = "inline-block";
-            hydratedFromLocalCount++;
           }
         } else if (record.mediaType === "video") {
           const card = videoCards[record.slotIndex];
-          if (card && card.dataset.source !== "cloud") {
+          if (card) {
             const video = card.querySelector(".video-element");
             const container = card.querySelector(".video-player-container");
             const thumbnailOverlay = card.querySelector(".video-thumbnail-placeholder");
@@ -677,27 +395,12 @@ async function loadPersistedMedia() {
             if (container) container.classList.remove("is-playing");
             if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
             if (replaceBtn) replaceBtn.style.display = "inline-flex";
-            hydratedFromLocalCount++;
           }
         }
       });
-
-      if (hydratedFromLocalCount > 0) {
-        console.log(`📁 Hydrated ${hydratedFromLocalCount} slots from local IndexedDB.`);
-      }
     }
-
-    // Update migration counter in admin modal
-    updateMigrationCount(localRecords ? localRecords.length : 0, hydratedFromCloudCount);
-  } catch (idbErr) {
-    console.error("IndexedDB read error:", idbErr);
-  }
-}
-
-function updateMigrationCount(localCount, cloudCount) {
-  const localCountEl = document.getElementById("migration-local-count");
-  if (localCountEl) {
-    localCountEl.innerHTML = `Browser Local Files: <strong>${localCount}</strong> &nbsp;|&nbsp; Cloud Synced: <strong>${cloudCount}</strong>`;
+  } catch (err) {
+    console.warn("IndexedDB check:", err);
   }
 }
 
@@ -1775,72 +1478,24 @@ function initPhotoSlots() {
         return;
       }
 
-      // If Supabase is configured but user is not logged in as owner, check permission
-      const isSbConfigured = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-      if (isSbConfigured && !supabaseMediaService.isAdmin()) {
-        const proceed = confirm("Owner login is recommended so uploaded photos are saved to the cloud for visitors. Proceed to sign in?");
-        if (proceed) {
-          openCloudAdminModal();
-          return;
-        }
-      }
-
-      showCardUploadOverlay(card, "Saving photo...", 25);
-
-      let publicUrl = "";
-      // 1. Upload to Supabase Cloud Storage & Database
-      if (isSbConfigured) {
-        try {
-          showCardUploadOverlay(card, "Uploading to Cloud...", 60);
-          const uploadRes = await supabaseMediaService.uploadMedia("photo", index, file);
-          publicUrl = uploadRes.publicUrl;
-          card.dataset.source = "cloud";
-        } catch (cloudErr) {
-          console.warn("Cloud photo upload error:", cloudErr);
-          showToast(`Cloud Notice: ${cloudErr.message || "Saved locally as backup"}`, "⚠️");
-        }
-      }
-
-      // 2. Save to IndexedDB permanently as local Blob backup
+      // Save to IndexedDB permanently as local Blob backup
       await mediaStorage.saveMedia("photo", index, file);
 
-      if (!publicUrl) {
-        publicUrl = registerObjectUrl(URL.createObjectURL(file));
-        card.dataset.source = "local";
-      }
-
-      imgElement.src = publicUrl;
+      const imageUrl = registerObjectUrl(URL.createObjectURL(file));
+      imgElement.src = imageUrl;
       imgElement.style.display = "block";
       if (placeholder) placeholder.style.display = "none";
       if (removeBtn) removeBtn.style.display = "inline-block";
 
-      hideCardUploadOverlay(card);
       soundEngine.playClick();
-      refreshLocalFileCount();
-      showToast(`Photo #${index + 1} saved successfully! 💖`, "📸");
+      showToast(`Photo #${index + 1} updated! 💖`, "📸");
     });
 
     // Remove photo handler
     removeBtn?.addEventListener("click", async (e) => {
       e.stopPropagation();
 
-      const isSbConfigured = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-      if (isSbConfigured && !supabaseMediaService.isAdmin()) {
-        showToast("Owner login required to remove photos 👑", "⚠️");
-        openCloudAdminModal();
-        return;
-      }
-
-      // 1. Delete from Supabase Cloud Storage & Database
-      if (isSbConfigured) {
-        try {
-          await supabaseMediaService.deleteMedia("photo", index);
-        } catch (cloudErr) {
-          console.warn("Supabase photo delete error:", cloudErr);
-        }
-      }
-
-      // 2. Delete from IndexedDB permanently
+      // Delete from IndexedDB permanently
       await mediaStorage.deleteMedia("photo", index);
 
       imgElement.src = "";
@@ -1848,8 +1503,6 @@ function initPhotoSlots() {
       if (placeholder) placeholder.style.display = "flex";
       if (removeBtn) removeBtn.style.display = "none";
       if (fileInput) fileInput.value = "";
-      delete card.dataset.source;
-      refreshLocalFileCount();
       showToast(`Photo #${index + 1} reset to placeholder`);
     });
 
@@ -1896,15 +1549,6 @@ batchUploadInput?.addEventListener("change", async (e) => {
     return;
   }
 
-  const isSbConfigured = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-  if (isSbConfigured && !supabaseMediaService.isAdmin()) {
-    const proceed = confirm("Owner login is recommended so uploaded photos are saved to the cloud for visitors. Proceed to sign in?");
-    if (proceed) {
-      openCloudAdminModal();
-      return;
-    }
-  }
-
   const cards = document.querySelectorAll(".photo-card");
   let loadedCount = 0;
 
@@ -1916,39 +1560,20 @@ batchUploadInput?.addEventListener("change", async (e) => {
       const placeholder = card.querySelector(".photo-placeholder");
       const removeBtn = card.querySelector(".remove-photo-btn");
 
-      showCardUploadOverlay(card, `Saving #${idx + 1}...`, 35);
-
-      let publicUrl = "";
-      if (isSbConfigured) {
-        try {
-          const res = await supabaseMediaService.uploadMedia("photo", idx, file);
-          publicUrl = res.publicUrl;
-          card.dataset.source = "cloud";
-        } catch (cloudErr) {
-          console.warn(`Cloud upload error on photo #${idx + 1}:`, cloudErr);
-        }
-      }
-
       // Save to IndexedDB permanently as local Blob backup
       await mediaStorage.saveMedia("photo", idx, file);
 
-      if (!publicUrl) {
-        publicUrl = registerObjectUrl(URL.createObjectURL(file));
-        card.dataset.source = "local";
-      }
-
-      img.src = publicUrl;
+      const imageUrl = registerObjectUrl(URL.createObjectURL(file));
+      img.src = imageUrl;
       img.style.display = "block";
       if (placeholder) placeholder.style.display = "none";
       if (removeBtn) removeBtn.style.display = "inline-block";
-      hideCardUploadOverlay(card);
       loadedCount++;
     }
   }
 
   soundEngine.playClick();
-  refreshLocalFileCount();
-  showToast(`Saved & synced ${loadedCount} photos into memories! ✨`, "📸");
+  showToast(`Loaded ${loadedCount} photos into memories! ✨`, "📸");
 });
 
 // ==========================================
@@ -2127,42 +1752,14 @@ function initVideoSlots() {
         return;
       }
 
-      const isSbConfigured = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-      if (isSbConfigured && !supabaseMediaService.isAdmin()) {
-        const proceed = confirm("Owner login is recommended so uploaded videos are saved to the cloud for visitors. Proceed to sign in?");
-        if (proceed) {
-          openCloudAdminModal();
-          return;
-        }
-      }
-
       // Stop any current playback on this card
       stopPlaybackAndShowThumbnail();
-
-      showCardUploadOverlay(container, "Uploading video to Cloud...", 25);
-
-      let publicUrl = "";
-      if (isSbConfigured) {
-        try {
-          showCardUploadOverlay(container, "Streaming to Cloud Storage...", 65);
-          const uploadRes = await supabaseMediaService.uploadMedia("video", index, file);
-          publicUrl = uploadRes.publicUrl;
-          card.dataset.source = "cloud";
-        } catch (cloudErr) {
-          console.warn("Cloud video upload error:", cloudErr);
-          showToast(`Cloud Notice: ${cloudErr.message || "Saved locally as backup"}`, "⚠️");
-        }
-      }
 
       // Save to IndexedDB permanently as raw Blob with metadata
       await mediaStorage.saveMedia("video", index, file);
 
-      if (!publicUrl) {
-        publicUrl = registerObjectUrl(URL.createObjectURL(file));
-        card.dataset.source = "local";
-      }
-
-      video.src = publicUrl;
+      const videoUrl = registerObjectUrl(URL.createObjectURL(file));
+      video.src = videoUrl;
       video.preload = "none";
       video.controls = false;
       video.style.display = "none";
@@ -2171,10 +1768,8 @@ function initVideoSlots() {
       if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
       if (replaceBtn) replaceBtn.style.display = "inline-flex";
 
-      hideCardUploadOverlay(container);
       soundEngine.playClick();
-      refreshLocalFileCount();
-      showToast(`Clip #${index + 1} uploaded! Click Play to watch. 🎞️`, "🎬");
+      showToast(`Clip #${index + 1} ready! Click Play to watch. 🎞️`, "🎬");
     });
 
     replaceBtn?.addEventListener("click", () => {
@@ -2234,15 +1829,6 @@ batchVideoInput?.addEventListener("change", async (e) => {
     return;
   }
 
-  const isSbConfigured = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.isConfigured();
-  if (isSbConfigured && !supabaseMediaService.isAdmin()) {
-    const proceed = confirm("Owner login is recommended so uploaded videos are saved to the cloud for visitors. Proceed to sign in?");
-    if (proceed) {
-      openCloudAdminModal();
-      return;
-    }
-  }
-
   const videoCards = document.querySelectorAll(".video-card");
   let loadedCount = 0;
 
@@ -2260,29 +1846,12 @@ batchVideoInput?.addEventListener("change", async (e) => {
         try { video.currentTime = 0; } catch (err) {}
       }
 
-      showCardUploadOverlay(container, `Saving Clip #${idx + 1}...`, 35);
-
-      let publicUrl = "";
-      if (isSbConfigured) {
-        try {
-          const res = await supabaseMediaService.uploadMedia("video", idx, file);
-          publicUrl = res.publicUrl;
-          card.dataset.source = "cloud";
-        } catch (cloudErr) {
-          console.warn(`Cloud video upload error on clip #${idx + 1}:`, cloudErr);
-        }
-      }
-
       // Save to IndexedDB permanently as raw Blob with metadata
       await mediaStorage.saveMedia("video", idx, file);
 
-      if (!publicUrl) {
-        publicUrl = registerObjectUrl(URL.createObjectURL(file));
-        card.dataset.source = "local";
-      }
-
+      const videoUrl = registerObjectUrl(URL.createObjectURL(file));
       if (video) {
-        video.src = publicUrl;
+        video.src = videoUrl;
         video.preload = "none";
         video.controls = false;
         video.style.display = "none";
@@ -2290,15 +1859,12 @@ batchVideoInput?.addEventListener("change", async (e) => {
       if (container) container.classList.remove("is-playing");
       if (thumbnailOverlay) thumbnailOverlay.style.display = "flex";
       if (replaceBtn) replaceBtn.style.display = "inline-flex";
-
-      hideCardUploadOverlay(container);
       loadedCount++;
     }
   }
 
   soundEngine.playClick();
-  refreshLocalFileCount();
-  showToast(`Uploaded & synced ${loadedCount} video clips! 🎞️`, "🎬");
+  showToast(`Saved & loaded ${loadedCount} video clips! 🎞️`, "🎬");
 });
 
 // ==========================================
@@ -2498,202 +2064,16 @@ function showToast(message, icon = "✨") {
 }
 
 // ==========================================
-// 11B. CLOUD ADMIN MODAL & MIGRATION CONTROLLER ☁️
-// ==========================================
-
-function openCloudAdminModal() {
-  const modal = document.getElementById("cloud-admin-modal");
-  if (!modal) return;
-  modal.style.display = "flex";
-
-  // Prepopulate form inputs from current config
-  if (window.SUPABASE_CONFIG) {
-    const cfg = window.SUPABASE_CONFIG.get();
-    const urlInput = document.getElementById("sb-project-url");
-    const keyInput = document.getElementById("sb-anon-key");
-    if (urlInput && !urlInput.value && !cfg.url.includes("YOUR_PROJECT_ID")) {
-      urlInput.value = cfg.url;
-    }
-    if (keyInput && !keyInput.value && !cfg.anonKey.includes("YOUR_SUPABASE_ANON_KEY")) {
-      keyInput.value = cfg.anonKey;
-    }
-  }
-
-  supabaseMediaService.updateAdminUI();
-  refreshLocalFileCount();
-}
-
-function closeCloudAdminModal() {
-  const modal = document.getElementById("cloud-admin-modal");
-  if (modal) modal.style.display = "none";
-}
-
-async function refreshLocalFileCount() {
-  try {
-    const records = await mediaStorage.getAllMedia();
-    const cloudRecords = await supabaseMediaService.fetchAllMedia();
-    updateMigrationCount(records ? records.length : 0, cloudRecords ? cloudRecords.length : 0);
-  } catch (e) {}
-}
-
-function initCloudAdminModal() {
-  const triggerBtn = document.getElementById("admin-cloud-btn");
-  const closeBtn = document.getElementById("close-cloud-modal-btn");
-  const backdrop = document.getElementById("cloud-modal-backdrop");
-  const saveBtn = document.getElementById("save-sb-config-btn");
-  const testBtn = document.getElementById("test-sb-connection-btn");
-  const loginBtn = document.getElementById("sb-owner-login-btn");
-  const logoutBtn = document.getElementById("sb-owner-logout-btn");
-  const migrateBtn = document.getElementById("start-migration-btn");
-
-  triggerBtn?.addEventListener("click", openCloudAdminModal);
-  closeBtn?.addEventListener("click", closeCloudAdminModal);
-  backdrop?.addEventListener("click", closeCloudAdminModal);
-
-  // Close on Escape key
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeCloudAdminModal();
-  });
-
-  // Save Credentials & Reconnect
-  saveBtn?.addEventListener("click", async () => {
-    const url = document.getElementById("sb-project-url")?.value.trim();
-    const key = document.getElementById("sb-anon-key")?.value.trim();
-
-    if (!url || !key) {
-      showToast("Please enter both Supabase Project URL and Anon Key.", "⚠️");
-      return;
-    }
-    if (!url.startsWith("https://")) {
-      showToast("Project URL must start with https://", "⚠️");
-      return;
-    }
-
-    window.SUPABASE_CONFIG.saveCredentials(url, key);
-    // Reset client to re-init with new credentials
-    supabaseMediaService.client = null;
-    supabaseMediaService.init();
-
-    showToast("Supabase credentials saved! Connecting...", "☁️");
-    supabaseMediaService.updateAdminUI();
-
-    // Reload persisted media from cloud
-    await loadPersistedMedia();
-    refreshLocalFileCount();
-  });
-
-  // Test Connection
-  testBtn?.addEventListener("click", async () => {
-    testBtn.disabled = true;
-    testBtn.textContent = "Testing...";
-    try {
-      const items = await supabaseMediaService.fetchAllMedia();
-      showToast(`Connection successful! Found ${items.length} cloud media items.`, "✅");
-      supabaseMediaService.updateAdminUI();
-    } catch (err) {
-      showToast(`Connection failed: ${err.message}`, "❌");
-    } finally {
-      testBtn.disabled = false;
-      testBtn.textContent = "Test Connection";
-    }
-  });
-
-  // Owner Login
-  loginBtn?.addEventListener("click", async () => {
-    const email = document.getElementById("sb-owner-email")?.value.trim();
-    const password = document.getElementById("sb-owner-password")?.value;
-
-    if (!email || !password) {
-      showToast("Please enter both email and password.", "⚠️");
-      return;
-    }
-
-    loginBtn.disabled = true;
-    loginBtn.textContent = "Signing In...";
-    try {
-      await supabaseMediaService.loginOwner(email, password);
-      showToast(`Welcome back, Owner! Upload & edit permissions unlocked. 👑`, "✨");
-    } catch (err) {
-      showToast(`Sign in error: ${err.message}`, "❌");
-    } finally {
-      loginBtn.disabled = false;
-      loginBtn.textContent = "Sign In as Owner";
-    }
-  });
-
-  // Owner Logout
-  logoutBtn?.addEventListener("click", async () => {
-    await supabaseMediaService.logoutOwner();
-    showToast("Signed out of Owner account.", "👋");
-  });
-
-  // Start Migration (Sync IndexedDB files to Supabase Cloud without deleting local copies)
-  migrateBtn?.addEventListener("click", async () => {
-    if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.isConfigured()) {
-      showToast("Please connect your Supabase credentials first.", "⚠️");
-      return;
-    }
-
-    const localRecords = await mediaStorage.getAllMedia();
-    if (!localRecords || localRecords.length === 0) {
-      showToast("No local files found in browser storage to migrate.", "ℹ️");
-      return;
-    }
-
-    migrateBtn.disabled = true;
-    const progressBox = document.getElementById("migration-progress-box");
-    const barFill = document.getElementById("migration-bar-fill");
-    const progressLabel = document.getElementById("migration-progress-label");
-
-    if (progressBox) progressBox.style.display = "block";
-
-    let successCount = 0;
-    let failCount = 0;
-    const total = localRecords.length;
-
-    for (let i = 0; i < total; i++) {
-      const item = localRecords[i];
-      const pct = Math.round(((i + 1) / total) * 100);
-      if (barFill) barFill.style.width = `${pct}%`;
-      if (progressLabel) progressLabel.textContent = `Uploading ${item.mediaType} #${item.slotIndex + 1} (${i + 1}/${total})...`;
-
-      try {
-        await supabaseMediaService.uploadMedia(item.mediaType, item.slotIndex, item.blob);
-        successCount++;
-      } catch (err) {
-        console.error(`Migration error for ${item.id}:`, err);
-        failCount++;
-      }
-    }
-
-    if (progressLabel) {
-      progressLabel.textContent = `Migration complete: ${successCount} uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ""}.`;
-    }
-
-    // Refresh UI media from cloud
-    await loadPersistedMedia();
-    refreshLocalFileCount();
-
-    migrateBtn.disabled = false;
-    showToast(`Cloud Sync Complete: ${successCount} items live for all visitors! 🎉`, "☁️");
-  });
-}
-
-// ==========================================
 // 12. INITIALIZATION ON DOM READY
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize Cloud Client & Admin UI
-  supabaseMediaService.init();
-  initCloudAdminModal();
-
   initStarfield();
   renderAtmosphericCanvas();
   initPhotoSlots();
   initVideoSlots();
 
-  // Retrieve & render all media items (Cloud first, IndexedDB fallback)
+  // Retrieve & render all media items (Static defaults + local IndexedDB)
   await loadPersistedMedia();
 
   applyConfigToUI();
@@ -2719,7 +2099,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     "%c💜 A Magical Birthday Surprise Website 🌙%c\n\n" +
     "Welcome to this magical birthday experience!\n" +
     "- Recipient name & message are locked and saved to Buggaluuu.\n" +
-    "- Photos & videos are powered by Supabase Cloud Storage with IndexedDB backup.\n" +
+    "- Photos & videos are bundled as static assets for permanent Vercel deployment.\n" +
     "- Audio effects and ambient moonlit music are procedurally synthesized via Web Audio API.\n" +
     "- Built with pure HTML, CSS, and vanilla JS.",
     "color: #7ddcff; font-size: 1.3rem; font-weight: bold;",
