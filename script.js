@@ -12,6 +12,62 @@
  */
 
 // ==========================================
+// 0. SECRET ACCESS KEY CONFIGURATION 🔐
+// ==========================================
+// Anyone opening the website must enter this key to unlock the surprise.
+// You can easily change this secret key at any time by editing the accessKey value below.
+const SECRET_ACCESS_CONFIG = {
+  // -------------------------------------------------------------
+  // SET YOUR SECRET ACCESS KEY HERE:
+  // -------------------------------------------------------------
+  accessKey: "[I WILL SET MY SECRET KEY HERE]",
+
+  // Alternate keys also accepted for smooth testing (case-insensitive):
+  alternateKeys: [
+    "buggaluuu",
+    "buggaluu",
+    "happy birthday"
+  ],
+
+  // Session storage key used for session persistence
+  sessionStorageKey: "birthday_surprise_access_unlocked"
+};
+
+function isAccessUnlocked() {
+  try {
+    return sessionStorage.getItem(SECRET_ACCESS_CONFIG.sessionStorageKey) === "true";
+  } catch (e) {
+    return false;
+  }
+}
+
+function validateSecretKey(enteredKey) {
+  if (!enteredKey || typeof enteredKey !== "string") return false;
+  const cleanInput = enteredKey.trim().toLowerCase();
+  if (!cleanInput) return false;
+
+  const primaryKey = (SECRET_ACCESS_CONFIG.accessKey || "").trim().toLowerCase();
+
+  // 1. Direct match with primary key
+  if (cleanInput === primaryKey) return true;
+
+  // 2. Match without outer brackets if user enters without brackets e.g. "I WILL SET MY SECRET KEY HERE"
+  const unbracketedPrimary = primaryKey.replace(/^\[+|\]+$/g, "").trim();
+  if (unbracketedPrimary && cleanInput === unbracketedPrimary) return true;
+
+  // 3. Match alternate keys
+  if (Array.isArray(SECRET_ACCESS_CONFIG.alternateKeys)) {
+    for (const alt of SECRET_ACCESS_CONFIG.alternateKeys) {
+      if (alt && alt.trim().toLowerCase() === cleanInput) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// ==========================================
 // 1. STATE MANAGEMENT & LOCAL STORAGE
 // ==========================================
 
@@ -687,6 +743,63 @@ class SoundEngine {
     osc.stop(now + 0.08);
   }
 
+  // Magical celestial chime for unlocking the Secret Access Key
+  playUnlockSound() {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.audioCtx) return;
+
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 arpeggio
+
+    notes.forEach((freq, idx) => {
+      const startTime = now + idx * 0.085;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, startTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.01, startTime + 0.35);
+
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.6);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.65);
+    });
+  }
+
+  // Gentle soft error buzz for incorrect key attempt
+  playErrorSound() {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.audioCtx) return;
+
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.18);
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.25);
+  }
+
   // Gentle procedural ambient moonlit chord arpeggiator
   startProceduralAmbient() {
     if (!this.audioCtx) this.init();
@@ -1037,6 +1150,9 @@ const screens = [
 ];
 
 function navigateTo(targetIndex) {
+  if (!isAccessUnlocked()) {
+    return;
+  }
   if (targetIndex < 0 || targetIndex >= TOTAL_SCREENS || targetIndex === currentScreenIndex) {
     return;
   }
@@ -1133,6 +1249,7 @@ document.querySelectorAll("[data-nav-target]").forEach(btn => {
 
 // Keyboard navigation support
 window.addEventListener("keydown", (e) => {
+  if (!isAccessUnlocked()) return;
   if (document.querySelector(".modal-overlay.open")) return;
   if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
 
@@ -1160,6 +1277,7 @@ const noseTriggerBtn = document.getElementById("nose-trigger-btn");
 
 if (noseTriggerBtn && characterStage) {
   const executeBoop = (event) => {
+    if (!isAccessUnlocked()) return;
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -2064,10 +2182,177 @@ function showToast(message, icon = "✨") {
 }
 
 // ==========================================
+// 11b. SECRET ACCESS KEY GATE CONTROLLER 🔐
+// ==========================================
+
+function spawnLockParticles(container) {
+  if (!container) return;
+  const particleSymbols = ["✨", "💜", "💫", "❤️", "🌙", "🌟", "💖", "✨"];
+  const total = 18;
+
+  for (let i = 0; i < total; i++) {
+    const p = document.createElement("span");
+    p.className = "lock-particle";
+    p.textContent = particleSymbols[i % particleSymbols.length];
+    
+    const angle = (Math.PI * 2 * i) / total + (Math.random() * 0.4 - 0.2);
+    const dist = 75 + Math.random() * 85;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist - 25;
+
+    p.style.setProperty("--tx", `${tx}px`);
+    p.style.setProperty("--ty", `${ty}px`);
+    p.style.left = "50%";
+    p.style.top = "20%";
+    p.style.fontSize = `${14 + Math.random() * 12}px`;
+    p.style.animationDelay = `${Math.random() * 0.12}s`;
+
+    container.appendChild(p);
+
+    setTimeout(() => {
+      p.remove();
+    }, 1400);
+  }
+}
+
+function initSecretLockScreen() {
+  const lockScreen = document.getElementById("secret-lock-screen");
+  const lockForm = document.getElementById("secret-lock-form");
+  const keyInput = document.getElementById("secret-key-input");
+  const eyeBtn = document.getElementById("toggle-key-visibility-btn");
+  const eyeIcon = document.getElementById("eye-icon");
+  const unlockBtn = document.getElementById("unlock-secret-btn");
+  const feedbackEl = document.getElementById("lock-feedback");
+  const cardEl = document.getElementById("lock-modal-card");
+  const shackleEl = document.getElementById("lock-shackle");
+  const inputGroup = document.getElementById("lock-input-group");
+
+  if (!lockScreen) return;
+
+  // 1. Session check: if already unlocked in this session, skip lock screen
+  if (isAccessUnlocked()) {
+    lockScreen.style.display = "none";
+    document.body.classList.remove("is-locked");
+    return;
+  }
+
+  // 2. Otherwise lock the site and present the Secret Access Key screen
+  document.body.classList.add("is-locked");
+  lockScreen.style.display = "flex";
+
+  // Auto-focus input smoothly
+  setTimeout(() => {
+    keyInput?.focus();
+  }, 350);
+
+  // 3. Toggle key visibility (password <-> text)
+  eyeBtn?.addEventListener("click", () => {
+    if (!keyInput) return;
+    if (keyInput.type === "password") {
+      keyInput.type = "text";
+      if (eyeIcon) eyeIcon.textContent = "🙈";
+      eyeBtn.title = "Hide secret key";
+    } else {
+      keyInput.type = "password";
+      if (eyeIcon) eyeIcon.textContent = "👁️";
+      eyeBtn.title = "Show secret key";
+    }
+    keyInput.focus();
+  });
+
+  // 4. Handle Unlock Submission
+  const handleUnlockAttempt = (e) => {
+    if (e) e.preventDefault();
+    const enteredVal = keyInput?.value || "";
+
+    if (validateSecretKey(enteredVal)) {
+      // SUCCESS!
+      if (keyInput) keyInput.disabled = true;
+      if (unlockBtn) unlockBtn.disabled = true;
+
+      // Play soft celestial unlock chime
+      if (window.soundEngine) {
+        soundEngine.playUnlockSound();
+      }
+
+      // Display "Access Granted ❤️"
+      if (feedbackEl) {
+        feedbackEl.className = "lock-feedback success";
+        feedbackEl.innerHTML = '<span class="feedback-icon">🔓</span> Access Granted ❤️';
+      }
+
+      // Lock shackle opens smoothly
+      if (shackleEl) {
+        shackleEl.classList.add("unlocked-shackle");
+      }
+
+      // Card glows with bioluminescent burst
+      if (cardEl) {
+        cardEl.classList.add("unlock-success");
+      }
+
+      // Spawn floating sparkles & hearts
+      spawnLockParticles(cardEl);
+
+      // Save to sessionStorage so same-session refreshes stay unlocked
+      try {
+        sessionStorage.setItem(SECRET_ACCESS_CONFIG.sessionStorageKey, "true");
+      } catch (err) {
+        console.warn("sessionStorage save failed:", err);
+      }
+
+      // Smoothly transition to the Boop It page
+      setTimeout(() => {
+        lockScreen.classList.add("fade-out");
+        document.body.classList.remove("is-locked");
+
+        setTimeout(() => {
+          lockScreen.style.display = "none";
+          // Focus the nose trigger for the user to enjoy the first interaction!
+          const noseBtn = document.getElementById("nose-trigger-btn");
+          noseBtn?.focus();
+        }, 750);
+      }, 900);
+
+    } else {
+      // INCORRECT KEY
+      if (window.soundEngine) {
+        soundEngine.playErrorSound();
+      }
+
+      if (feedbackEl) {
+        feedbackEl.className = "lock-feedback error";
+        feedbackEl.textContent = "Oops! That's not the magic key. Try again ❤️";
+      }
+
+      if (inputGroup) {
+        inputGroup.classList.add("input-error");
+        setTimeout(() => inputGroup.classList.remove("input-error"), 900);
+      }
+
+      if (cardEl) {
+        cardEl.classList.remove("shake");
+        void cardEl.offsetWidth; // Force CSS reflow to retrigger animation
+        cardEl.classList.add("shake");
+        setTimeout(() => cardEl.classList.remove("shake"), 650);
+      }
+
+      keyInput?.focus();
+      keyInput?.select();
+    }
+  };
+
+  lockForm?.addEventListener("submit", handleUnlockAttempt);
+}
+
+// ==========================================
 // 12. INITIALIZATION ON DOM READY
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Initialize Secret Access Key lock gate first
+  initSecretLockScreen();
+
   initStarfield();
   renderAtmosphericCanvas();
   initPhotoSlots();

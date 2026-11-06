@@ -7,6 +7,14 @@
     <meta name="description" content="A personalized, cinematic, and emotional moonlit birthday surprise website.">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>">
+  <script>
+    // Prevent flash of secret lock screen for active unlocked sessions
+    try {
+      if (sessionStorage.getItem("birthday_surprise_access_unlocked") === "true") {
+        document.documentElement.classList.add("already-unlocked");
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
 
@@ -29,6 +37,85 @@
 
   <!-- Celebratory Confetti & Floating Hearts Canvas -->
   <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+
+  <!-- ==========================================
+       SECRET ACCESS KEY GATE (INITIAL LOCK SCREEN)
+       ========================================== -->
+  <div id="secret-lock-screen" class="secret-lock-screen" role="dialog" aria-modal="true" aria-labelledby="lock-heading">
+    <div class="lock-ambient-glow" aria-hidden="true"></div>
+    <div class="lock-modal-card" id="lock-modal-card">
+      
+      <!-- Glowing Animated Padlock Icon -->
+      <div class="lock-icon-wrapper" id="lock-icon-wrapper">
+        <div class="lock-icon-pulse" aria-hidden="true"></div>
+        <svg class="lock-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Orbital glow circle -->
+          <circle cx="32" cy="32" r="30" stroke="rgba(115, 210, 250, 0.28)" stroke-width="1.5" stroke-dasharray="3 3" />
+          <!-- Animated shackle that pops open -->
+          <path id="lock-shackle" class="lock-shackle" d="M22 28V19C22 13.4772 26.4772 9 32 9C37.5228 9 42 13.4772 42 19V28" stroke="#7ddcff" stroke-width="4.5" stroke-linecap="round" />
+          <!-- Padlock Body -->
+          <rect class="lock-body" x="16" y="27" width="32" height="27" rx="7" fill="url(#lockBodyGrad)" stroke="#73d2fa" stroke-width="2" />
+          <!-- Heart Accent on Lock Body -->
+          <path d="M32 32.5C32 32.5 30.6 31.2 29.3 32.1C28.2 33 28.6 34.4 32 36.5C35.4 34.4 35.8 33 34.7 32.1C33.4 31.2 32 32.5 32 32.5Z" fill="#ffb4cd" opacity="0.85" />
+          <!-- Keyhole -->
+          <circle cx="32" cy="41" r="2.8" fill="#030b15" />
+          <path d="M30.8 41.5L29.8 48H34.2L33.2 41.5Z" fill="#030b15" />
+          <defs>
+            <linearGradient id="lockBodyGrad" x1="16" y1="27" x2="48" y2="54" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#1b5474" />
+              <stop offset="0.55" stop-color="#123a56" />
+              <stop offset="1" stop-color="#071827" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="lock-sparkle-star star-1" aria-hidden="true">✨</span>
+        <span class="lock-sparkle-star star-2" aria-hidden="true">💜</span>
+      </div>
+
+      <!-- Romantic Lock Screen Header -->
+      <div class="lock-text-block">
+        <div class="lock-mini-badge">
+          <span>🌙 A Moonlit Surprise</span>
+        </div>
+        <h1 class="lock-heading" id="lock-heading">A Little Secret Awaits...</h1>
+        <p class="lock-subtitle">Only someone special knows the key to unlock this surprise.</p>
+      </div>
+
+      <!-- Key Input Form -->
+      <form id="secret-lock-form" class="lock-form" autocomplete="off" onsubmit="return false;">
+        <div class="lock-input-group" id="lock-input-group">
+          <span class="lock-input-icon" aria-hidden="true">🔑</span>
+          <input 
+            type="password" 
+            id="secret-key-input" 
+            class="lock-input" 
+            placeholder="Enter the magic key..." 
+            aria-label="Secret Access Key" 
+            autocomplete="off" 
+            spellcheck="false"
+            required
+          />
+          <button type="button" id="toggle-key-visibility-btn" class="lock-eye-btn" title="Show or hide secret key" aria-label="Toggle password visibility">
+            <span id="eye-icon">👁️</span>
+          </button>
+        </div>
+
+        <!-- Feedback message container (Error / Success) -->
+        <div id="lock-feedback" class="lock-feedback" aria-live="polite"></div>
+
+        <!-- Unlock Button -->
+        <button type="submit" id="unlock-secret-btn" class="unlock-btn">
+          <span class="btn-sparkle">✨</span>
+          <span class="btn-text">Unlock My Surprise</span>
+          <span class="btn-heart">❤️</span>
+        </button>
+      </form>
+
+      <div class="lock-card-footer">
+        <span>Whisper the magic word only you and I share 🌊</span>
+      </div>
+    </div>
+  </div>
 
   <!-- ==========================================
        TOP GLOBAL HEADER & PROGRESS TRACKER
